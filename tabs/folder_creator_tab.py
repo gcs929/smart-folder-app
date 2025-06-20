@@ -201,18 +201,56 @@ class FolderCreatorTab(QWidget):
             self.on_left_tree_item_selected(root_item, 0)  # 手动触发一次，以更新UI
 
     def _populate_children_qt(self, parent_qtreeitem, parent_path):
-        # ... (前面的代码) ...
+        entries = []
+        if not parent_path or not os.path.isdir(parent_path):
+            if parent_qtreeitem and hasattr(parent_qtreeitem, 'takeChildren'):
+                parent_qtreeitem.takeChildren()
+            return
+
+        try:
+            entries = sorted(os.listdir(parent_path))
+        except OSError as e:
+            self.status_updated.emit(f"无法读取目录 '{os.path.basename(parent_path)}': {e}", True, 4000)
+            if parent_qtreeitem and hasattr(parent_qtreeitem, 'takeChildren'):
+                parent_qtreeitem.takeChildren()
+            return
+
+        if parent_qtreeitem and hasattr(parent_qtreeitem, 'takeChildren'):
+            parent_qtreeitem.takeChildren()
+
+        if not entries:
+            if parent_qtreeitem and hasattr(parent_qtreeitem, 'childCount') and parent_qtreeitem.childCount() == 0:
+                if hasattr(QTreeWidgetItem.ChildIndicatorPolicy, 'DontShowIndicatorWhenChildless'):
+                    parent_qtreeitem.setChildIndicatorPolicy(
+                        QTreeWidgetItem.ChildIndicatorPolicy.DontShowIndicatorWhenChildless)
+            return
+
         for entry_name in entries:
             full_path = os.path.join(parent_path, entry_name)
             if os.path.isdir(full_path) and helpers._is_normal_directory(
-                    full_path):  # 确保 helpers._is_normal_directory 已正确定义
-                child_item = QTreeWidgetItem(parent_qtreeitem, [entry_name])
+                    full_path):  # 确保 helpers 和 _is_normal_directory OK
+                child_item = None
+                if parent_qtreeitem:
+                    child_item = QTreeWidgetItem(parent_qtreeitem, [entry_name])
+                else:
+                    if hasattr(self, 'left_tree_widget'):
+                        child_item = QTreeWidgetItem(self.left_tree_widget, [entry_name])
+                    else:
+                        continue
+
+                if not child_item:
+                    continue
+
                 child_item.setData(0, Qt.ItemDataRole.UserRole, full_path)
-                child_item.setIcon(0, QApplication.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
+                try:
+                    child_item.setIcon(0, QApplication.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
+                except NameError:  # QApplication or QStyle might not be imported in this scope if not careful
+                    pass
+                except Exception:  # Catch other potential icon setting errors
+                    pass
 
                 try:
                     has_real_subdirs = False
-                    # 提前检查是否有下一级真实目录，以便决定是否显示指示器
                     for sub_entry_name in os.listdir(full_path):
                         sub_full_path = os.path.join(full_path, sub_entry_name)
                         if os.path.isdir(sub_full_path) and helpers._is_normal_directory(sub_full_path):
@@ -220,19 +258,18 @@ class FolderCreatorTab(QWidget):
                             break
 
                     if has_real_subdirs:
-                        # 如果有子目录，则显示指示器
-                        child_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.Show европейски Directory)
-                        # 为了懒加载，可以考虑添加一个虚拟子节点，然后 itemExpanded 时再加载真实子节点
-                        # QTreeWidgetItem(child_item, ["..."])
-                        else:
-                        # 如果没有子目录，则不显示指示器（或者使用 DontShowIndicatorWhenChildless，它会自动处理）
+                        # *** 这是关键的修正行 ***
+                        child_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowевропейскиDirectory)
+                    else:
+                        if hasattr(QTreeWidgetItem.ChildIndicatorPolicy, 'DontShowIndicatorWhenChildless'):
+                            child_item.setChildIndicatorPolicy(
+                                QTreeWidgetItem.ChildIndicatorPolicy.DontShowIndicatorWhenChildless)
+                except OSError:
+                    if hasattr(QTreeWidgetItem.ChildIndicatorPolicy, 'DontShowIndicatorWhenChildless'):
                         child_item.setChildIndicatorPolicy(
                             QTreeWidgetItem.ChildIndicatorPolicy.DontShowIndicatorWhenChildless)
-                except OSError:
-                    # 如果无法列出子目录（权限等问题），也按没有子目录处理指示器
-                    child_item.setChildIndicatorPolicy(
-                        QTreeWidgetItem.ChildIndicatorPolicy.DontShowIndicatorWhenChildless)
-                    pass
+                except AttributeError:  # Catch if ChildIndicatorPolicy or its members are wrong
+                    pass  # Silently ignore if policy setting fails, better than crashing
 
     def on_left_tree_item_selected(self, item, column):
         if item is None: return  # 防止item为空时出错
