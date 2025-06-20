@@ -77,5 +77,27 @@ def sanitize_filename(name):
         return "sanitized_empty_name"  # 或其他默认名
 
     return name
+def _is_normal_directory(path): # <--- 检查函数名是否完全匹配
+    """
+    检查是否为普通、非系统、非隐藏文件夹。
+    """
+    try:
+        # 确保路径存在并且确实是一个目录
+        if not os.path.exists(path) or not os.path.isdir(path):
+            return False # 如果路径不存在或不是目录，则不是普通目录
 
+        base_name = os.path.basename(path).lower()
+        if base_name in SYSTEM_FOLDER_NAMES:
+            return False
+
+        if platform.system() == "Windows":
+            attrs = os.stat(path).st_file_attributes
+            if attrs & (stat.FILE_ATTRIBUTE_HIDDEN | stat.FILE_ATTRIBUTE_SYSTEM):
+                return False
+        elif os.path.basename(path).startswith('.'): # 非Windows系统检查点开头
+            return False
+        return True
+    except (OSError, AttributeError) as e:
+        # print(f"Warning: Error checking directory attributes for '{path}': {e}")
+        return False # 如果检查属性时出错，也认为不是普通目录
 # ... (你已有的 clean_tax_id, clean_phone 等函数) ...

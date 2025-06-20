@@ -201,30 +201,38 @@ class FolderCreatorTab(QWidget):
             self.on_left_tree_item_selected(root_item, 0)  # 手动触发一次，以更新UI
 
     def _populate_children_qt(self, parent_qtreeitem, parent_path):
-        if not os.path.isdir(parent_path):
-            return
-        try:
-            entries = sorted(os.listdir(parent_path))
-        except OSError as e:
-            self.status_updated.emit(f"无法读取 '{os.path.basename(parent_path)}': {e}", True, 4000)
-            return
-
+        # ... (前面的代码) ...
         for entry_name in entries:
             full_path = os.path.join(parent_path, entry_name)
-            if os.path.isdir(full_path) and helpers._is_normal_directory(full_path):
+            if os.path.isdir(full_path) and helpers._is_normal_directory(
+                    full_path):  # 确保 helpers._is_normal_directory 已正确定义
                 child_item = QTreeWidgetItem(parent_qtreeitem, [entry_name])
                 child_item.setData(0, Qt.ItemDataRole.UserRole, full_path)
                 child_item.setIcon(0, QApplication.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
 
-                # 初步的懒加载指示器：如果它还有子目录，就让它可以展开
                 try:
-                    if any(os.path.isdir(os.path.join(full_path, sub)) and helpers._is_normal_directory(
-                            os.path.join(full_path, sub)) for sub in os.listdir(full_path)):
-                        child_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.Showレクトリ)
-                        # 或者添加一个dummy子节点以便后续在itemExpanded时加载
-                        # QTreeWidgetItem(child_item, ["加载中..."])
+                    has_real_subdirs = False
+                    # 提前检查是否有下一级真实目录，以便决定是否显示指示器
+                    for sub_entry_name in os.listdir(full_path):
+                        sub_full_path = os.path.join(full_path, sub_entry_name)
+                        if os.path.isdir(sub_full_path) and helpers._is_normal_directory(sub_full_path):
+                            has_real_subdirs = True
+                            break
+
+                    if has_real_subdirs:
+                        # 如果有子目录，则显示指示器
+                        child_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.Show европейски Directory)
+                        # 为了懒加载，可以考虑添加一个虚拟子节点，然后 itemExpanded 时再加载真实子节点
+                        # QTreeWidgetItem(child_item, ["..."])
+                        else:
+                        # 如果没有子目录，则不显示指示器（或者使用 DontShowIndicatorWhenChildless，它会自动处理）
+                        child_item.setChildIndicatorPolicy(
+                            QTreeWidgetItem.ChildIndicatorPolicy.DontShowIndicatorWhenChildless)
                 except OSError:
-                    pass  # 忽略下一级目录的访问错误
+                    # 如果无法列出子目录（权限等问题），也按没有子目录处理指示器
+                    child_item.setChildIndicatorPolicy(
+                        QTreeWidgetItem.ChildIndicatorPolicy.DontShowIndicatorWhenChildless)
+                    pass
 
     def on_left_tree_item_selected(self, item, column):
         if item is None: return  # 防止item为空时出错
