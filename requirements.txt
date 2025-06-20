@@ -1,0 +1,8 @@
+PyQt6
+openpyxl
+Pillow
+pyperclip
+# For Windows clipboard file operations (optional)
+# pywin32
+# For styling (optional)
+# qdarkstyle
